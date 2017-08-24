@@ -1,0 +1,10 @@
+server:
+  port: 9200
+
+spring:
+  thymeleaf:
+    mode: HTML5
+    cache: false
+    suffix: .html
+    prefix: classpath:/viewer/
+    check-template-location: false
