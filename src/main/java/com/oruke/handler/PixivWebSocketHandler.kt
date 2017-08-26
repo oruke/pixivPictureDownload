@@ -44,6 +44,7 @@ open class PixivWebSocketHandler : WebSocketHandler {
 
      * @param data
      */
+    @Synchronized
     fun <T> sendMessageToAll(data: T) {
         sessionMap.forEach { sessionId, webSocketSession ->
             try {
@@ -63,7 +64,8 @@ open class PixivWebSocketHandler : WebSocketHandler {
      * *
      * @param data
      */
-    fun <T> sendMessageToSessoinId(sessionId: String, data: T) {
+    @Synchronized
+    fun <T> sendMessageToSessionId(sessionId: String, data: T) {
         val webSocketSession = sessionMap[sessionId]
         try {
             if (webSocketSession != null && webSocketSession.isOpen) {
