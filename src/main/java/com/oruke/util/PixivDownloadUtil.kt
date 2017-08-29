@@ -20,26 +20,13 @@ import java.util.concurrent.atomic.AtomicLong
  */
 class PixivDownloadUtil internal constructor(private val pixivWebSocketHandler: PixivWebSocketHandler, private val sessionId: String, private val cookie: String,
                                              private val url: String) : Runnable {
-    private val regexUrl = "^(http(s)?://www\\.pixiv\\.net/member_illust\\.php\\?mode=medium&illust_id=\\d+$|" +
-            "http(s)?://www\\.pixiv\\.net/member_illust\\.php\\?mode=manga&illust_id=\\d+\$|" +
-            "http(s)?://www\\.pixiv\\.net/member_illust\\.php\\?type=illust&id=\\d+\$|" +
-            "http(s)?://www\\.pixiv\\.net/member_illust\\.php\\?id=\\d+&type=illust&p=\\d+\$|" +
-            "http(s)?://www\\.pixiv\\.net/member_illust\\.php\\?type=manga&id=\\d+\$|" +
-            "http(s)?://www\\.pixiv\\.net/member_illust\\.php\\?id=\\d+&type=manga&p=d+\$|" +
-            "http(s)?://www\\.pixiv\\.net/member_illust\\.php\\?type=manga&id=\\d+\$|" +
-            "http(s)?://www\\.pixiv\\.net/member_illust\\.php\\?id=\\d+&type=manga&p=\\d+\$|" +
-            "http(s)?://www\\.pixiv\\.net/member_illust\\.php\\?id=\\d+\$|" +
-            "http(s)?://www\\.pixiv\\.net/member_illust\\.php\\?id=\\d+&type=all&p=\\d+\$)"
-    private val regexMedium = "^http(s)?://www\\.pixiv\\.net/member_illust\\.php\\?mode=medium&illust_id=\\d+$"
-    private val regexManga = "^http(s)?://www\\.pixiv\\.net/member_illust\\.php\\?mode=manga&illust_id=\\d+$"
-    private val regexAuthorIllust1 = "^http(s)?://www\\.pixiv\\.net/member_illust\\.php\\?type=illust&id=\\d+$"
-    private val regexAuthorIllust2 = "^http(s)?://www\\.pixiv\\.net/member_illust\\.php\\?id=\\d+&type=illust&p=\\d+$"
-    private val regexAuthorManga1 = "^http(s)?://www\\.pixiv\\.net/member_illust\\.php\\?type=manga&id=\\d+$"
-    private val regexAuthorManga2 = "^http(s)?://www\\.pixiv\\.net/member_illust\\.php\\?id=\\d+&type=manga&p=d+$"
-    private val regexAuthorUgoira1 = "^http(s)?://www\\.pixiv\\.net/member_illust\\.php\\?type=manga&id=\\d+$"
-    private val regexAuthorUgoira2 = "^http(s)?://www\\.pixiv\\.net/member_illust\\.php\\?id=\\d+&type=manga&p=\\d+$"
-    private val regexAuthor1 = "^http(s)?://www\\.pixiv\\.net/member_illust\\.php\\?id=\\d+$"
-    private val regexAuthor2 = "^http(s)?://www\\.pixiv\\.net/member_illust\\.php\\?id=\\d+&type=all&p=\\d+$"
+    private val regexMedium = "^http(s)?://www\\.pixiv\\.net/member_illust\\.php\\?mode=medium&illust_id=\\d+$".toRegex()
+    private val regexManga = "^http(s)?://www\\.pixiv\\.net/member_illust\\.php\\?mode=manga&illust_id=\\d+$".toRegex()
+    private val regexAuthorIllust = "^http(s)?://www\\.pixiv\\.net/member_illust\\.php\\?(type=illust&id=\\d+|id=\\d+&type=illust&p=\\d+)$".toRegex()
+    private val regexAuthorManga = "^http(s)?://www\\.pixiv\\.net/member_illust\\.php\\?(type=manga&id=\\d+|id=\\d+&type=manga&p=d+)$".toRegex()
+    private val regexAuthorUgoira = "^http(s)?://www\\.pixiv\\.net/member_illust\\.php\\?(type=manga&id=\\d+|id=\\d+&type=manga&p=\\d+)$".toRegex()
+    private val regexAuthor = "^http(s)?://www\\.pixiv\\.net/member_illust\\.php\\?(id=\\d+|id=\\d+&type=all&p=\\d+)$".toRegex()
+    private val regexBookmark = "^http(s)?://www\\.pixiv\\.net/bookmark\\.php\\w+$".toRegex()
     private val host = "https://www.pixiv.net"
     var downloadMeans = DownloadMeans.LOCAL
     private val client = OkHttpClient()
@@ -60,18 +47,20 @@ class PixivDownloadUtil internal constructor(private val pixivWebSocketHandler: 
 
     @Throws(Exception::class)
     fun download() {
-        if (url.matches(regexMedium.toRegex())) {
+        if (url.matches(regexMedium)) {
             medium(url)
-        } else if (url.matches(regexManga.toRegex())) {
+        } else if (url.matches(regexManga)) {
             manga(url)
-        } else if (url.matches(regexAuthorIllust1.toRegex()) || url.matches(regexAuthorIllust2.toRegex())) {
+        } else if (url.matches(regexAuthorIllust)) {
             author(Type.MEDIUM)
-        } else if (url.matches(regexAuthorManga1.toRegex()) || url.matches(regexAuthorManga2.toRegex())) {
+        } else if (url.matches(regexAuthorManga)) {
             author(Type.MANGA)
-        } else if (url.matches(regexAuthorUgoira1.toRegex()) || url.matches(regexAuthorUgoira2.toRegex())) {
+        } else if (url.matches(regexAuthorUgoira)) {
             author(Type.UGOIRA)
-        } else if (url.matches(regexAuthor1.toRegex()) || url.matches(regexAuthor2.toRegex())) {
+        } else if (url.matches(regexAuthor)) {
             author(Type.ALL)
+        } else if (url.matches(regexBookmark)) {
+            author(Type.BOOKMARK)
         } else {
             throw Exception("URL不匹配")
         }
@@ -80,27 +69,25 @@ class PixivDownloadUtil internal constructor(private val pixivWebSocketHandler: 
 
     @Throws(Exception::class)
     fun author(type: Type) {
-        val regex1: String
-        val regex2: String
+        val regex: Regex
         when (type) {
             PixivDownloadUtil.Type.ALL -> {
-                regex1 = regexAuthor1
-                regex2 = regexAuthor2
+                regex = regexAuthor
             }
             PixivDownloadUtil.Type.MEDIUM -> {
-                regex1 = regexAuthorIllust1
-                regex2 = regexAuthorIllust2
+                regex = regexAuthorIllust
             }
             PixivDownloadUtil.Type.MANGA -> {
-                regex1 = regexAuthorManga1
-                regex2 = regexAuthorManga2
+                regex = regexAuthorManga
             }
             PixivDownloadUtil.Type.UGOIRA -> {
-                regex1 = regexAuthorUgoira1
-                regex2 = regexAuthorUgoira2
+                regex = regexAuthorUgoira
+            }
+            PixivDownloadUtil.Type.BOOKMARK -> {
+                regex = regexBookmark
             }
         }
-        val i: AtomicLong = AtomicLong(0)
+        val i = AtomicLong(0)
         while (true) {
             i.getAndAdd(1)
             println(Thread.currentThread().name + "=>" + urlQueue.size())
@@ -112,14 +99,14 @@ class PixivDownloadUtil internal constructor(private val pixivWebSocketHandler: 
             val response = client.newCall(request).execute()
             val html = response.body()!!.string()
             val document = Jsoup.parse(html)
-            if (link.matches(regexMedium.toRegex())) {
+            if (link.matches(regexMedium)) {
                 medium(link)
                 continue
             }
-            val aList = document.getElementsByTag("a")
+            val aList = document.getElementsByTag(".layout-column-2 a")
             val links = aList.stream().map { element -> element.attr("href") }
             val intactLinks = links.filter(StrUtil::isNotBlank).map { link1 -> urlUtil(link, link1) }.filter { link1 ->
-                (link1.matches(regex1.toRegex()) || link1.matches(regex2.toRegex()) || link1.matches(regexMedium.toRegex()))
+                (link1.matches(regex) || link1.matches(regexMedium))
             }
             for (link1 in intactLinks) {
                 urlQueue.add(link1)
@@ -242,7 +229,8 @@ class PixivDownloadUtil internal constructor(private val pixivWebSocketHandler: 
         MANGA,
         ALL,
         MEDIUM,
-        UGOIRA
+        UGOIRA,
+        BOOKMARK
     }
 
     enum class DownloadMeans {
