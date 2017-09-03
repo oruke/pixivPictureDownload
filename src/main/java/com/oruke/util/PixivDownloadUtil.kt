@@ -26,7 +26,7 @@ class PixivDownloadUtil internal constructor(private val pixivWebSocketHandler: 
     private val regexAuthorManga = "^http(s)?://www\\.pixiv\\.net/member_illust\\.php\\?(type=manga&id=\\d+|id=\\d+&type=manga&p=d+)$".toRegex()
     private val regexAuthorUgoira = "^http(s)?://www\\.pixiv\\.net/member_illust\\.php\\?(type=manga&id=\\d+|id=\\d+&type=manga&p=\\d+)$".toRegex()
     private val regexAuthor = "^http(s)?://www\\.pixiv\\.net/member_illust\\.php\\?(id=\\d+|id=\\d+&type=all&p=\\d+)$".toRegex()
-    private val regexBookmark = "^http(s)?://www\\.pixiv\\.net/bookmark\\.php\\w+$".toRegex()
+    private val regexBookmark = "^http(s)?://www\\.pixiv\\.net/bookmark\\.php.*$".toRegex()
     private val host = "https://www.pixiv.net"
     var downloadMeans = DownloadMeans.LOCAL
     private val client = OkHttpClient()
@@ -103,10 +103,10 @@ class PixivDownloadUtil internal constructor(private val pixivWebSocketHandler: 
                 medium(link)
                 continue
             }
-            val aList = document.getElementsByTag(".layout-column-2 a")
-            val links = aList.stream().map { element -> element.attr("href") }
-            val intactLinks = links.filter(StrUtil::isNotBlank).map { link1 -> urlUtil(link, link1) }.filter { link1 ->
-                (link1.matches(regex) || link1.matches(regexMedium))
+            val aList = document.select(".layout-column-2 a")
+            val links = aList.map { it.attr("href") }
+            val intactLinks = links.filter(StrUtil::isNotBlank).map { urlUtil(link, it) }.filter {
+                it.matches(regex) || it.matches(regexMedium)
             }
             for (link1 in intactLinks) {
                 urlQueue.add(link1)
@@ -129,8 +129,12 @@ class PixivDownloadUtil internal constructor(private val pixivWebSocketHandler: 
 
         val imgUrl = document.select("img.original-image").attr("data-src")
         val aclass = document.select("div.works_display a").attr("class")
+        val author = document.select("div.layout-column-1 div.profile a.user-name").text()
+        val authorUrl = document.select("div.layout-column-1 div.profile a.user-name").attr("href")
+        val authorId = authorUrl.split("id=")[1]
+        val path = "$author($authorId)"
         if (StrUtil.isBlank(aclass) || !aclass.contains("multiple")) {
-            img(url, imgUrl)
+            img(url, imgUrl, path)
             return
         }
 
@@ -149,6 +153,10 @@ class PixivDownloadUtil internal constructor(private val pixivWebSocketHandler: 
         val document = Jsoup.parse(html)
 
         val originalElements = document.select("div.item-container a.full-size-container")
+        val author = document.select("footer.end-page ul.breadcrumbs a.user").text()
+        val authorUrl = document.select("footer.end-page ul.breadcrumbs a.user").attr("href")
+        val authorId = authorUrl.split("id=")[1]
+        val path = "$author($authorId)"
         originalElements
                 .map { it.attr("href") }
                 .map {
@@ -161,11 +169,11 @@ class PixivDownloadUtil internal constructor(private val pixivWebSocketHandler: 
                 .map { it.body()!!.string() }
                 .map { Jsoup.parse(it) }
                 .map { it.select("img").attr("src") }
-                .forEach { img(url, it) }
+                .forEach { img(url, it, path) }
     }
 
     @Throws(Exception::class)
-    fun img(referer: String, imgUrl: String) {
+    fun img(referer: String, imgUrl: String, path: String) {
         val headers = headers()
         headers.put("Referer", referer)
         val imgRequest = Request.Builder()
@@ -182,9 +190,10 @@ class PixivDownloadUtil internal constructor(private val pixivWebSocketHandler: 
                 map.put("message", "正在下载：$img")
                 map.put("class", "alert-success")
                 pixivWebSocketHandler.sendMessageToSessionId(sessionId, map)
-                val file = File("/pixivDownload")
+                val downloadPath = "/pixivDownload/$path"
+                val file = File(downloadPath)
                 if (!file.exists()) file.mkdir()
-                val outStream = FileOutputStream("/pixivDownload/$img")
+                val outStream = FileOutputStream("$downloadPath/$img")
                 ByteStreams.copy(imgResponse.body()!!.byteStream(), outStream)
                 outStream.flush()
                 outStream.close()
@@ -194,7 +203,7 @@ class PixivDownloadUtil internal constructor(private val pixivWebSocketHandler: 
             }
             DownloadMeans.BROWSER -> {
                 val bytes = imgResponse.body()!!.bytes()
-                val list = bytes.map { it.toString() }
+                val list = bytes.map(Byte::toString)
 
                 map.put("type", "file")
                 map.put(img, list)
@@ -211,10 +220,10 @@ class PixivDownloadUtil internal constructor(private val pixivWebSocketHandler: 
         if (link.contains("://")) {
             return link
         }
-        if (link.substring(0, 1) == "/") {
+        if (link.substring(0, 1) != "?") {
             return host + link
         }
-        return url.split("\\?".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()[0] + link
+        return url.split("?").dropLastWhile(String::isEmpty).toTypedArray()[0] + link
     }
 
     override fun run() {
