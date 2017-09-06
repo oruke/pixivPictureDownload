@@ -1,4 +1,4 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://maven.apache.org/POM/4.0.0"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.oruke</groupId>
@@ -16,7 +16,6 @@
         <okhttp.version>3.8.1</okhttp.version>
         <guava.version>19.0</guava.version>
         <hutool.version>2.4.2</hutool.version>
-        <lombok.version>1.16.10</lombok.version>
 
         <jquery.version>3.2.1</jquery.version>
         <bootstrap.version>3.3.7</bootstrap.version>
@@ -77,11 +76,6 @@
             <groupId>com.google.guava</groupId>
             <artifactId>guava</artifactId>
             <version>${guava.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.projectlombok</groupId>
-            <artifactId>lombok</artifactId>
-            <version>${lombok.version}</version>
         </dependency>
 
         <!--webjars静态资源-->

@@ -84,7 +84,7 @@ class PixivDownloadUtil internal constructor(private val pixivWebSocketHandler: 
                 regex = regexAuthorUgoira
             }
             PixivDownloadUtil.Type.BOOKMARK -> {
-                regex = regexBookmark
+                regex = "^http(s)?://www\\.pixiv\\.net/bookmark\\.php.*p=\\d+$".toRegex()
             }
         }
         val i = AtomicLong(0)
@@ -220,8 +220,11 @@ class PixivDownloadUtil internal constructor(private val pixivWebSocketHandler: 
         if (link.contains("://")) {
             return link
         }
-        if (link.substring(0, 1) != "?") {
+        if (link.substring(0, 1) == "/") {
             return host + link
+        }
+        if (link.substring(0, 1) != "?") {
+            return "$host/$link"
         }
         return url.split("?").dropLastWhile(String::isEmpty).toTypedArray()[0] + link
     }
